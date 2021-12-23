@@ -2,8 +2,17 @@ from flask import Flask, request
 from random import Random
 from string import ascii_lowercase
 import time
+from typing import Dict
+from urllib.parse import urlencode
 
 app = Flask(__name__)
+
+
+def url_with_override(url: str, query: Dict[str, str], **overrides):
+    """Helper function to produce a url with one or more params updated"""
+    new_query = query.copy()
+    new_query.update(overrides)
+    return f"{url}?{urlencode(new_query)}"
 
 
 @app.route("/", methods=["GET"])
@@ -17,9 +26,14 @@ def game(seed=None):
     # seed provides continuity for shuffling
     if seed is None:
         seed = int(time.time())
+    # We use this rather than request.url because that may not have seed in it yet
+    game_url = f"/{seed}"
     # turn tracks advancement through the game
-    turn = int(request.args.get("turn", 1))
-    next_page = f"/{seed}?turn={turn + 1}"
+    query = dict(request.args)
+    query.setdefault("turn", 1)
+    turn = int(query["turn"])
+    plan_statuses = [query.get(key, "open") for key in ["n1", "n2", "n3"]]
+    next_page = url_with_override(game_url, query, turn=turn + 1)
     # Set advanced=off in url parameters to exclude advanced plans
     advanced = request.args.get("advanced")
     objs_a = list(range(6 if advanced == "off" else 11))
@@ -51,11 +65,14 @@ def game(seed=None):
     obj_tags = []
     # We identify the plans here, but don't place them in the html yet because
     # they will be displayed in a single column, not row
-    # TODO: Support flipping plans to back side
     # TODO: Parameterize image height and width
     for (i, choice) in enumerate(objectives):
-        img = f"/static/card_images/n{i + 1}_{ascii_lowercase[choice]}.png"
-        tag = f"<img src=\"{img}\" alt=\"An Objective\" height=272 width=208>"
+        status = plan_statuses[i]
+        opposite_status = "open" if status == "done" else "done"
+        flip_link = url_with_override(game_url, query, **{f"n{i + 1}": opposite_status})
+        back = "_back" if status == "done" else ""
+        img = f"/static/card_images/n{i + 1}_{ascii_lowercase[choice]}{back}.png"
+        tag = f"<a href={flip_link}><img src=\"{img}\" alt=\"An Objective\" height=272 width=208></a>"
         obj_tags.append(tag)
     # TODO: Use templates to build page
     # Building the table as we go is pretty ugly
