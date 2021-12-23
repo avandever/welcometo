@@ -47,7 +47,7 @@ def url_with_override(url: str, query: Dict[str, str], **overrides):
     return f"{url}?{urlencode(new_query)}"
 
 
-def prep_deck(deck: List[Card], shuffler: Shuffler, turn: int) -> List[List[Card]]:
+def prep_deck_inner(deck: List[Card], shuffler: Shuffler, turn: int) -> List[List[Card]]:
     """
     Helper that performs initial deck setup, then simulates end-of-stack
     reshuffling based on the number of turns that passed since initial setup
@@ -61,6 +61,22 @@ def prep_deck(deck: List[Card], shuffler: Shuffler, turn: int) -> List[List[Card
             last_card = pile.pop()
             shuffler(pile)
             pile.insert(0, last_card)
+    return piles
+
+
+def prep_deck(
+    deck: List[Card],
+    shuffler: Shuffler,
+    turn: int,
+    reshuffle_turn: int = None,
+) -> List[List[Card]]:
+    if reshuffle_turn is not None:
+        piles = prep_deck_inner(deck, shuffler, reshuffle_turn)
+        deck = []
+        for pile in piles:
+            deck.extend(pile)
+        turn = turn - reshuffle_turn - 1
+    piles = prep_deck_inner(deck, shuffler, turn)
     return piles
 
 
@@ -84,18 +100,30 @@ def game(seed=None):
     turn = int(query["turn"])
     plan_statuses = [query.get(key, "open") for key in ["n1", "n2", "n3"]]
     next_page = url_with_override(game_url, query, turn=turn + 1)
+    next_page_text = f"<a href={next_page}>Next Turn</a>"
     # Set advanced=off in url parameters to exclude advanced plans
-    advanced = request.args.get("advanced")
+    advanced = query.get("advanced")
     objs_a = list(range(6 if advanced == "off" else 11))
     objs_b = list(range(6 if advanced == "off" else 11))
     objs_c = list(range(6))
     shuffler = Shuffler(seed)
     # Initial deck shuffle
     deck = get_deck()
-    piles = prep_deck(deck, shuffler, turn)
+    reshuffle_turn = query.get("reshuffle_turn")
+    if reshuffle_turn is not None:
+        reshuffle_turn = int(reshuffle_turn)
+        # Start counting since the reshuffle
+        mod_turn = (turn - reshuffle_turn - 1) % 26
+        reshuffle_text = ""
+    else:
+        mod_turn = turn % 26
+        if "done" in plan_statuses:
+            reshuffle_text = ""
+        else:
+            reshuffle_link = url_with_override(game_url, query, turn=turn + 1, reshuffle_turn=turn)
+            reshuffle_text = f"<a href={reshuffle_link}>Perform first-plan reshuffle</a>"
+    piles = prep_deck(deck, shuffler, turn, reshuffle_turn)
     # Here we actually identify the active cards from each pile
-    # 26 % 26 = 0, but actually we want to treat turn 26 like turn 26, yet turn 27 like turn 1.
-    mod_turn = turn % 26
     symbol_cards = [p[mod_turn] for p in piles]
     number_cards = [p[mod_turn + 1] for p in piles]
     # We identify the plans here, but don't place them in the html yet because
@@ -135,7 +163,7 @@ def game(seed=None):
     value += f"<td>{obj_tags[1]}</td>"
     # Third row consists of link to the next page, and third objective - still
     # in column 4
-    value += f"</tr><tr><td><a href={next_page}>Next Turn</a></td><td></td><td></td>"
+    value += f"</tr><tr><td>{next_page_text}</td><td></td><td>{reshuffle_text}</td>"
     value += f"<td>{obj_tags[2]}</td>"
     # Wrap up the table
     value += "</tr></table>"
