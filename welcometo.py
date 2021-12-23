@@ -30,7 +30,8 @@ def game(seed=None):
     game_url = f"/{seed}"
     # turn tracks advancement through the game
     query = dict(request.args)
-    query.setdefault("turn", 1)
+    # Math works better if we start with turn 0
+    query.setdefault("turn", 0)
     turn = int(query["turn"])
     plan_statuses = [query.get(key, "open") for key in ["n1", "n2", "n3"]]
     next_page = url_with_override(game_url, query, turn=turn + 1)
@@ -53,18 +54,16 @@ def game(seed=None):
     # TODO: Implement first goal completed reshuffle
     # This logic simulates flipping the 27th card from each pile over when
     # reshuffling
-    for x in range((turn - 1) // 26):
+    for x in range(turn // 26):
         for pile in piles:
             last_card = pile.pop()
             r.shuffle(pile)
             pile.insert(0, last_card)
     # Here we actually identify the active cards from each pile
     # 26 % 26 = 0, but actually we want to treat turn 26 like turn 26, yet turn 27 like turn 1.
-    mod_turn = (turn - 1) % 26 + 1
-    if mod_turn == 0:
-        mod_turn = 26
-    symbol_cards = [p[mod_turn - 1] for p in piles]
-    number_cards = [p[mod_turn] for p in piles]
+    mod_turn = turn % 26
+    symbol_cards = [p[mod_turn] for p in piles]
+    number_cards = [p[mod_turn + 1] for p in piles]
     obj_tags = []
     # We identify the plans here, but don't place them in the html yet because
     # they will be displayed in a single column, not row
