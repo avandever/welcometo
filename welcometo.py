@@ -2,10 +2,32 @@ from flask import Flask, request
 from random import Random
 from string import ascii_lowercase
 import time
-from typing import Dict
+from typing import Dict, List
 from urllib.parse import urlencode
 
 app = Flask(__name__)
+
+
+class Card:
+    """Representation of a card"""
+    __slots__ = ["number", "symbol"]
+    def __init__(self, number: str, symbol: str):
+        self.number = number
+        self.symbol = symbol
+
+    @property
+    def number_face(self):
+        """Construct file name for image of card's number side, like 11_pool.png"""
+        return f"{self.number}_{self.symbol}.png"
+
+    @property
+    def symbol_face(self):
+        """Construct file name for image of card's symol side, like pool.png"""
+        return f"{self.symbol}.jpg"
+
+
+    def __str__(self):
+        return f"{self.number}/{self.symbol}"
 
 
 class Shuffler:
@@ -23,6 +45,23 @@ def url_with_override(url: str, query: Dict[str, str], **overrides):
     new_query = query.copy()
     new_query.update(overrides)
     return f"{url}?{urlencode(new_query)}"
+
+
+def prep_deck(deck: List[Card], shuffler: Shuffler, turn: int) -> List[List[Card]]:
+    """
+    Helper that performs initial deck setup, then simulates end-of-stack
+    reshuffling based on the number of turns that passed since initial setup
+    """
+    shuffler(deck)
+    num_piles = 3
+    pile_size = len(deck) // num_piles
+    piles = [deck[pile_size * x:pile_size * (x + 1)] for x in range(num_piles)]
+    for x in range(turn // (pile_size - 1)):
+        for pile in piles:
+            last_card = pile.pop()
+            shuffler(pile)
+            pile.insert(0, last_card)
+    return piles
 
 
 @app.route("/", methods=["GET"])
@@ -53,18 +92,7 @@ def game(seed=None):
     shuffler = Shuffler(seed)
     # Initial deck shuffle
     deck = get_deck()
-    shuffler(deck)
-    # 3 equal piles
-    pile_size = len(deck) // 3
-    piles = [deck[pile_size * x:pile_size * (x + 1)] for x in range(3)]
-    # TODO: Implement first goal completed reshuffle
-    # This logic simulates flipping the 27th card from each pile over when
-    # reshuffling
-    for x in range(turn // 26):
-        for pile in piles:
-            last_card = pile.pop()
-            shuffler(pile)
-            pile.insert(0, last_card)
+    piles = prep_deck(deck, shuffler, turn)
     # Here we actually identify the active cards from each pile
     # 26 % 26 = 0, but actually we want to treat turn 26 like turn 26, yet turn 27 like turn 1.
     mod_turn = turn % 26
@@ -112,28 +140,6 @@ def game(seed=None):
     # Wrap up the table
     value += "</tr></table>"
     return value
-
-
-class Card:
-    """Representation of a card"""
-    __slots__ = ["number", "symbol"]
-    def __init__(self, number: str, symbol: str):
-        self.number = number
-        self.symbol = symbol
-
-    @property
-    def number_face(self):
-        """Construct file name for image of card's number side, like 11_pool.png"""
-        return f"{self.number}_{self.symbol}.png"
-
-    @property
-    def symbol_face(self):
-        """Construct file name for image of card's symol side, like pool.png"""
-        return f"{self.symbol}.jpg"
-
-
-    def __str__(self):
-        return f"{self.number}/{self.symbol}"
 
 
 # The deck as designed in the original game
