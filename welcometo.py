@@ -5,24 +5,14 @@ import time
 
 app = Flask(__name__)
 
-@app.route("/")
-def hello_world():
-    return "welcometo blah"
 
-
-@app.route("/user/")
-@app.route("/user/<username>")
-def show_user_profile(username=None):
-    return f"User {escape(username)}"
-
-
-@app.route("/game/", methods=["GET"])
-@app.route("/game/<int:seed>", methods=["GET"])
+@app.route("/", methods=["GET"])
+@app.route("/<int:seed>", methods=["GET"])
 def game(seed=None):
     if seed is None:
         seed = int(time.time())
     turn = int(request.args.get("turn", 1))
-    next_page = f"/game/{seed}?turn={turn + 1}"
+    next_page = f"/{seed}?turn={turn + 1}"
     advanced = request.args.get("advanced")
     objs_a = list(range(6 if advanced == "off" else 11))
     objs_b = list(range(6 if advanced == "off" else 11))
