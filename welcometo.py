@@ -48,20 +48,23 @@ def game(seed=None):
     # This is simple enough
     deck = get_deck()
     r.shuffle(deck)
-    # TODO: Each pile should be reshuffled individually
+    pile_size = len(deck) // 3
+    piles = [deck[pile_size * x:pile_size * (x + 1)] for x in range(3)]
     # TODO: Implement first goal completed reshuffle
     # This logic simulates flipping the 27th card from each pile over when
     # reshuffling
-    for x in range(turn // 26):
-        extension = deck[(x - 1) * 27 * 3:(27 * x - 1) * 3]
-        r.shuffle(extension)
-        deck.extend(extension)
-    piles = [[], [], []]
-    for (i, card) in enumerate(deck):
-        piles[i % 3].append(card)
+    for x in range((turn - 1) // 26):
+        for pile in piles:
+            last_card = pile.pop()
+            r.shuffle(pile)
+            pile.insert(0, last_card)
     # Here we actually identify the active cards from each pile
-    symbol_cards = [p[turn - 1] for p in piles]
-    number_cards = [p[turn] for p in piles]
+    # 26 % 26 = 0, but actually we want to treat turn 26 like turn 26, yet turn 27 like turn 1.
+    mod_turn = (turn - 1) % 26 + 1
+    if mod_turn == 0:
+        mod_turn = 26
+    symbol_cards = [p[mod_turn - 1] for p in piles]
+    number_cards = [p[mod_turn] for p in piles]
     obj_tags = []
     # We identify the plans here, but don't place them in the html yet because
     # they will be displayed in a single column, not row
@@ -118,6 +121,10 @@ class Card:
     def symbol_face(self):
         """Construct file name for image of card's symol side, like pool.png"""
         return f"{self.symbol}.jpg"
+
+
+    def __str__(self):
+        return f"{self.number}/{self.symbol}"
 
 
 # The deck as designed in the original game
