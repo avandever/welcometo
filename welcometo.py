@@ -8,6 +8,16 @@ from urllib.parse import urlencode
 app = Flask(__name__)
 
 
+class Shuffler:
+    """Helper class to reset random seed before each shuffle"""
+    def __init__(self, seed):
+        self.seed = seed
+
+    def __call__(self, obj):
+        r = Random(self.seed)
+        r.shuffle(obj)
+
+
 def url_with_override(url: str, query: Dict[str, str], **overrides):
     """Helper function to produce a url with one or more params updated"""
     new_query = query.copy()
@@ -40,15 +50,11 @@ def game(seed=None):
     objs_a = list(range(6 if advanced == "off" else 11))
     objs_b = list(range(6 if advanced == "off" else 11))
     objs_c = list(range(6))
-    r = Random(seed)
-    # If this happened after deck shuffling we could end up swapping out plans
-    r.shuffle(objs_a)
-    r.shuffle(objs_b)
-    r.shuffle(objs_c)
-    objectives = [objs_a[0], objs_b[0], objs_c[0]]
-    # This is simple enough
+    shuffler = Shuffler(seed)
+    # Initial deck shuffle
     deck = get_deck()
-    r.shuffle(deck)
+    shuffler(deck)
+    # 3 equal piles
     pile_size = len(deck) // 3
     piles = [deck[pile_size * x:pile_size * (x + 1)] for x in range(3)]
     # TODO: Implement first goal completed reshuffle
@@ -57,16 +63,20 @@ def game(seed=None):
     for x in range(turn // 26):
         for pile in piles:
             last_card = pile.pop()
-            r.shuffle(pile)
+            shuffler(pile)
             pile.insert(0, last_card)
     # Here we actually identify the active cards from each pile
     # 26 % 26 = 0, but actually we want to treat turn 26 like turn 26, yet turn 27 like turn 1.
     mod_turn = turn % 26
     symbol_cards = [p[mod_turn] for p in piles]
     number_cards = [p[mod_turn + 1] for p in piles]
-    obj_tags = []
     # We identify the plans here, but don't place them in the html yet because
     # they will be displayed in a single column, not row
+    shuffler(objs_a)
+    shuffler(objs_b)
+    shuffler(objs_c)
+    objectives = [objs_a[0], objs_b[0], objs_c[0]]
+    obj_tags = []
     # TODO: Parameterize image height and width
     for (i, choice) in enumerate(objectives):
         status = plan_statuses[i]
